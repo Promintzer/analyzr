@@ -183,7 +183,7 @@ server <- function(input, output, session){
 
   # UI Adder ----
   observeEvent(input$add, {
-    appendTab(inputId = "plottabs", #select = TRUE,
+    appendTab(inputId = "plottabs", select = TRUE,
       tab = tabPanel(
 
         # Title and Close-Button
@@ -612,8 +612,13 @@ server <- function(input, output, session){
         #print(colnames(as.data.frame(get(input[[paste0("data_select", i)]]))))
 
         # Create final sql
+        # If data does not exist, at start up.
+        # This is just a workaround. Final solution should be debounce, or other conditioning.
+        if(sql2 == ""){
+          #print("30")
+          sql_final <- "select * from mtcars"
         # If filter is empty or first filter does not exist
-        if(length(filter_collect) == 0 | is.null(sql5[[paste0(i, "_1")]])){
+        } else if(length(filter_collect) == 0 | is.null(sql5[[paste0(i, "_1")]])){
           #print("31a")
           print(paste0(sql1, sql2))
           sql_final <- paste0(sql1, sql2)

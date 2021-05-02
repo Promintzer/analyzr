@@ -14,6 +14,7 @@ library(shinydashboard)
 library(shinydashboardPlus)
 library(ggplot2)
 library(ggthemes)
+library(ggExtra)
 library(DT)
 library(sqldf)
 
@@ -242,13 +243,30 @@ server <- function(input, output, session){
                 # )
                 # conditionalPanel(
                 #   condition = paste0("input.plotsidebar", input$add, " == 'ps_titleaxis", input$add, "'"),
+                
+                  # Title and Axis label
                   textInput(inputId = paste0("ps_title", input$add), label = "Title", placeholder = "Title of the plot"),
                   textInput(inputId = paste0("ps_xlab", input$add), label = "X-Axis Label", placeholder = "Label for X-Axis"),
                   textInput(inputId = paste0("ps_ylab", input$add), label = "Y-Axis Label", placeholder = "Label for Y-Axis"),
+                
+                  # Themes, color-scales, fill-scales
+                  tags$hr(style="border-color: gray"),
                   selectInput(inputId = paste0("ps_theme", input$add), label = "Theme", choices = c("<null>", names(themes)), selected = "<null>"),
                   selectInput(inputId = paste0("ps_colorsc", input$add), label = "Color Scales", choices = c("<null>", names(colorscales)), selected = "<null>"),
                   selectInput(inputId = paste0("ps_fillsc", input$add), label = "Fill Scales", choices = c("<null>", names(fillscales)), selected = "<null>"),
-                  selectInput(inputId = paste0("plot_facet", input$add), label = "Multiple Plots by", choices = NULL)
+                
+                  # Facet
+                  tags$hr(style="border-color: gray"),
+                  selectInput(inputId = paste0("plot_facet", input$add), label = "Multiple Plots by", choices = NULL),
+                
+                  # Marginal
+                  tags$hr(style="border-color: gray"),
+                  checkboxInput(inputId = paste0("marginal_check", input$add), label = "Marginal Graphs", value = FALSE),
+                  selectInput(inputId = paste0("marginal_type", input$add), label = "Marginal Plot Type", choices = c("density","histogram","boxplot","violin","densigram"), selected = "histogram"),
+                  selectInput(inputId = paste0("marginal_axis", input$add), label = "Show on Axis", choices = c("both", "x", "y"), selected = "both"),
+                  numericInput(inputId = paste0("marginal_size", input$add), label = "Size Main vs Marginal", value = 5, min = 1, max = 5, step = 1),
+                  checkboxInput(inputId = paste0("marginal_color", input$add), label = "Marginal Color", value = FALSE),
+                  checkboxInput(inputId = paste0("marginal_fill", input$add), label = "Marginal Fill", value = FALSE),
                 # )
               ),
               plotOutput(outputId = paste0("plot", input$add))
@@ -302,47 +320,51 @@ server <- function(input, output, session){
         # Plot Parameters
         fluidRow(
           column(width = 4,
+            # Plot Type
             selectInput(inputId = paste0("plottype", i, "_", input[[paste0("addlayer", i)]]), label = "Plot Type", choices = NULL),
+            # Y-Axis
             conditionalPanel(
-              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== '<null>' && input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== 'Histogram'"),
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== '<null>' && input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== 'Histogram' && input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== 'Density'"),
               selectInput(inputId = paste0("axisy_select", i, "_", input[[paste0("addlayer", i)]]), label = "Y-Axis", choices = NULL),
             ),
+            # X-Axis
             conditionalPanel(
-              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== '<null>'"),
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== '<null>' && input.plottype", i, "_", input[[paste0("addlayer", i)]], "!== 'Boxplot'"),
               selectInput(inputId = paste0("axisx_select", i, "_", input[[paste0("addlayer", i)]]), label = "X-Axis", choices = NULL)
             )
           ),
           column(width = 4,
+            # Color
             conditionalPanel(
-              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Scatter' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Smooth' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Line' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Histogram' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Bar'"),
-              # Color
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Scatter' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Smooth' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Line' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Histogram' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Bar' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Boxplot' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Area' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Density'"),
               tags$div(style = 'display: inline-block; vertical-align:middle; width: 250px;', selectInput(inputId = paste0("plot_color", i, "_", input[[paste0("addlayer", i)]]), label = "Color by", choices = NULL)),
               tags$div(style = 'display: inline-block; vertical-align:middle; width: 150px;', checkboxInput(inputId = paste0("plot_color_factor", i, "_", input[[paste0("addlayer", i)]]), label = "As Factor", value = FALSE))
             ),
+            # Fill
+            conditionalPanel(
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Bar' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Histogram' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Boxplot' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Area' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Density'"),
+              tags$div(style = 'display: inline-block; vertical-align:middle; width: 250px;', selectInput(inputId = paste0("plot_fill", i, "_", input[[paste0("addlayer", i)]]), label = "Fill by", choices = NULL)),
+              tags$div(style = 'display: inline-block; vertical-align:middle; width: 150px;', checkboxInput(inputId = paste0("plot_fill_factor", i, "_", input[[paste0("addlayer", i)]]), label = "As Factor", value = FALSE))
+            ),
+            # Shape
             conditionalPanel(
               condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Scatter'"),
-              # Shape
               selectInput(inputId = paste0("plot_shape", i, "_", input[[paste0("addlayer", i)]]), label = "Shape by", choices = NULL)
             ),
+            # Line Type
             conditionalPanel(
-              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Line'"),
-              # Line Type
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Line' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Density'"),
               selectInput(inputId = paste0("plot_linetype", i, "_", input[[paste0("addlayer", i)]]), label = "Line Type", choices = c("solid", "blank", "dashed", "dotted", "dotdash", "longdash", "twodash"), selected = "solid")
             ),
+            # Size
             conditionalPanel(
               condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Scatter' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Line'"),
-              # Size
               tags$div(style = 'display: inline-block; vertical-align:middle; width: 250px;', selectInput(inputId = paste0("plot_size", i, "_", input[[paste0("addlayer", i)]]), label = "Size by", choices = NULL)),
               tags$div(style = 'display: inline-block; vertical-align:middle; width: 150px;', checkboxInput(inputId = paste0("plot_size_factor", i, "_", input[[paste0("addlayer", i)]]), label = "As Factor", value = FALSE))
             ),
+            # Position
             conditionalPanel(
               condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Bar' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Histogram'"),
-              # Fill
-              selectInput(inputId = paste0("plot_fill", i, "_", input[[paste0("addlayer", i)]]), label = "Fill by", choices = NULL),
-            ),
-            conditionalPanel(
-              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Bar' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Histogram'"),
-              # Position
               selectInput(inputId = paste0("plot_position", i, "_", input[[paste0("addlayer", i)]]), label = "Position", choices = c("Stack","Dodge","Fill"), selected = "Stack")
             ),
             # Smooth
@@ -362,6 +384,11 @@ server <- function(input, output, session){
             conditionalPanel(
               condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Histogram'"),
               numericInput(inputId = paste0("histogram_bins", i, "_", input[[paste0("addlayer", i)]]), label = "Bins", value = 30, step = 1)
+            ),
+            # Kernel density method
+            conditionalPanel(
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Density'"),
+              selectInput(inputId = paste0("density_method", i, "_", input[[paste0("addlayer", i)]]), label = "Method", choices = c("gaussian","epanechnikov","rectangular","triangular","biweight","cosine","optcosine"), selected = "gaussian")
             )
           )
         )
@@ -462,6 +489,13 @@ server <- function(input, output, session){
           updateTextInput(session, inputId = paste0("ps_title", i), value = "")
           updateTextInput(session, inputId = paste0("ps_xlab", i), value = "")
           updateTextInput(session, inputId = paste0("ps_ylab", i), value = "")
+          # Marginal
+          updateCheckboxInput(session, inputId = paste0("marginal_check", i), value = FALSE)
+          updateSelectInput(session, inputId = paste0("marginal_type", i), selected = "histogram")
+          updateSelectInput(session, inputId = paste0("marginal_axis", i), selected = "both")
+          updateNumericInput(session, inputId = paste0("marginal_size", i), value = 5)
+          updateCheckboxInput(session, inputId = paste0("marginal_color", i), value = FALSE)
+          updateCheckboxInput(session, inputId = paste0("marginal_fill", i), value = FALSE)
         }
       }
     })
@@ -476,7 +510,7 @@ server <- function(input, output, session){
           print("update widgets: data or layer")
 
           # Plot Type
-          updateSelectInput(session, inputId = paste0("plottype", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>","Scatter", "Bar", "Line", "Histogram", "Smooth"), selected = "<null>")
+          updateSelectInput(session, inputId = paste0("plottype", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>","Scatter", "Bar", "Line", "Area", "Histogram", "Density", "Boxplot", "Smooth"), selected = "<null>")
           # Axis
           updateSelectInput(session, inputId = paste0("axisy_select", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
           updateSelectInput(session, inputId = paste0("axisx_select", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
@@ -496,6 +530,8 @@ server <- function(input, output, session){
           updateSelectInput(session, inputId = paste0("plot_linetype", i, "_", input[[paste0("addlayer", i)]]), selected = "solid")
           # Histogram
           updateNumericInput(session, inputId = paste0("histogram_bins", i, "_", input[[paste0("addlayer", i)]]), value = 30)
+          # Density
+          updateSelectInput(session, inputId = paste0("density_method", i, "_", input[[paste0("addlayer", i)]]), selected = "gaussian")
         }
       }
     })
@@ -661,7 +697,6 @@ server <- function(input, output, session){
 
 
 
-
       # Plot construction ----
       p1 <- ggplot(data = datr())
 
@@ -683,7 +718,7 @@ server <- function(input, output, session){
         plot_colorr[[paste0(i, "_", j)]]      <- checker(data = datr, inputid = input[[paste0("plot_color", i, "_", j)]], inputid_f = input[[paste0("plot_color_factor", i, "_", j)]])
         plot_shaper[[paste0(i, "_", j)]]      <- checker(data = datr, inputid = input[[paste0("plot_shape", i, "_", j)]], inputid_f = TRUE)
         plot_sizer[[paste0(i, "_", j)]]       <- checker(data = datr, inputid = input[[paste0("plot_size", i, "_", j)]], inputid_f = input[[paste0("plot_size_factor", i, "_", j)]])
-        plot_fillr[[paste0(i, "_", j)]]       <- checker(data = datr, inputid = input[[paste0("plot_fill", i, "_", j)]], inputid_f = FALSE)
+        plot_fillr[[paste0(i, "_", j)]]       <- checker(data = datr, inputid = input[[paste0("plot_fill", i, "_", j)]], inputid_f = input[[paste0("plot_fill_factor", i, "_", j)]])
 
         # Print (debug)
         # print(paste0("plottype", i, "_", j))
@@ -779,7 +814,63 @@ server <- function(input, output, session){
           )
 
         } else
-
+        
+        #############################################################
+        # Area - X & Y-Axis
+        if(
+          input[[paste0("plottype", i, "_", j)]] == "Area" &&
+          !is.null(axisyr[[paste0(i, "_", j)]]) &&
+          !is.null(axisxr[[paste0(i, "_", j)]])
+        ){
+          
+          geom_area(
+            aes_string(
+              x =       axisxr[[paste0(i, "_", j)]],
+              y =       axisyr[[paste0(i, "_", j)]],
+              fill =    plot_fillr[[paste0(i, "_", j)]],
+              color =   plot_colorr[[paste0(i, "_", j)]]
+            )
+          )
+          
+        } else
+        
+        #############################################################
+        # Area - Y-Axis
+        if(
+          input[[paste0("plottype", i, "_", j)]] == "Area" &&
+          !is.null(axisyr[[paste0(i, "_", j)]])
+        ){
+          
+          geom_area(
+            aes_string(
+              y =       axisyr[[paste0(i, "_", j)]],
+              fill =    plot_fillr[[paste0(i, "_", j)]],
+              color =   plot_colorr[[paste0(i, "_", j)]]
+            ),
+            stat =      "bin"
+          )
+          
+        } else
+          
+        #############################################################
+        # Area - X-Axis
+        if(
+          input[[paste0("plottype", i, "_", j)]] == "Area" &&
+          !is.null(axisxr[[paste0(i, "_", j)]])
+        ){
+          
+          geom_area(
+            aes_string(
+              x =       axisxr[[paste0(i, "_", j)]],
+              fill =    plot_fillr[[paste0(i, "_", j)]],
+              color =   plot_colorr[[paste0(i, "_", j)]]
+            ),
+            stat =      "bin"
+          )
+          
+        } else
+          
+          
         #############################################################
         # Line
         if(
@@ -820,6 +911,42 @@ server <- function(input, output, session){
         } else
 
         #############################################################
+        # Density
+        if(
+          input[[paste0("plottype", i, "_", j)]] == "Density" &&
+          !is.null(axisxr[[paste0(i, "_", j)]])
+        ){
+          
+          geom_density(
+            aes_string(
+              x =       axisxr[[paste0(i, "_", j)]],
+              fill =    plot_fillr[[paste0(i, "_", j)]],
+              color =   plot_colorr[[paste0(i, "_", j)]]
+            ),
+            linetype =  input[[paste0("plot_linetype", i, "_", j)]],
+            kernel =    input[[paste0("density_method", i, "_", j)]]
+          )
+          
+        } else
+
+        #############################################################
+        # Boxplot
+        if(
+          input[[paste0("plottype", i, "_", j)]] == "Boxplot" &&
+          !is.null(axisyr[[paste0(i, "_", j)]])
+        ){
+          
+          geom_boxplot(
+            aes_string(
+              y =       axisyr[[paste0(i, "_", j)]],
+              fill =    plot_fillr[[paste0(i, "_", j)]],
+              color =   plot_colorr[[paste0(i, "_", j)]]
+            )
+          )
+          
+        } else
+        
+        #############################################################
         # Smooth
         if(
           input[[paste0("plottype", i, "_", j)]] == "Smooth" &&
@@ -851,7 +978,7 @@ server <- function(input, output, session){
       # print(adder)
       # print(removerr[[paste0(i)]])
 
-
+      
       # Add geoms, but remove layers, if remover is not null.
       if(is.null(removerr[[paste0(i)]])){
         p1 <- p1+adder
@@ -892,7 +1019,19 @@ server <- function(input, output, session){
       if(input[[paste0("ps_ylab", i)]] != ""){
         p1 <- p1 + ylab(input[[paste0("ps_ylab", i)]])
       }}
-
+      # Marginal Plot
+      if(!is.null(input[[paste0("marginal_check", i)]])){
+        if(input[[paste0("marginal_check", i)]]){
+          p1 <- ggMarginal(
+            p =            p1,
+            type =         input[[paste0("marginal_type", i)]],
+            margins =      input[[paste0("marginal_axis", i)]],
+            size =         input[[paste0("marginal_size", i)]],
+            groupColour =  input[[paste0("marginal_color", i)]],
+            groupFill =    input[[paste0("marginal_fill", i)]]
+          )
+        }
+      }
 
 
 

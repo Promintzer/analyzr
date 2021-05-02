@@ -5,7 +5,7 @@ account: jp333
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 4028291
-bundleId: 4517228
+bundleId: 4547412
 url: https://jp333.shinyapps.io/analyzr/
-when: 1619372815.46449
-lastSyncTime: 1619372815.46449
+when: 1619982096.50571
+lastSyncTime: 1619982096.50571

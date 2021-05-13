@@ -17,6 +17,9 @@ library(ggthemes)
 library(ggExtra)
 library(DT)
 library(sqldf)
+library(colourpicker)
+library(stringr)
+library(rlang)
 
 
 
@@ -92,6 +95,47 @@ boxSidebarNew <- function (..., id = NULL, width = 50, background = "#333a40",
                                                                                shiny::tags$li(...)))
   shiny::tagList(toolbarTag, contentTag)
 }
+
+
+# GG-Handler ----
+# Required to put arguments in the right place regarding custom_-type and also make factor.
+gghandler <- function(geom, type, react, widgetval, widgetout, session, factorname, factorval, ...){
+  
+  # Argument should be added, if the widget it not null or if custom_ is selected
+  if(!is.null(react) || substr(widgetval, start = 1, stop = 9) == "**CUSTOM_"){
+    if(substr(widgetval, start = 1, stop = 9) == "**CUSTOM_"){
+      #print("custom color")
+      if(type != "shape"){
+        updateCheckboxInput(session, inputId = factorname, value = FALSE)
+      }
+      geom$aes_params[[type]] <- widgetout
+    } else {
+      #print("color by")
+      for(k in 1:length(geom$mapping)){
+        if(!is.null(geom$mapping[[k]])){
+          adder <- get_env(geom$mapping[[k]])
+        }
+      }
+      adder <- as_quosure(x = str2lang(widgetval), env = adder)
+      geom$mapping[[type]] <- adder
+    }
+  }
+  # Make it a factor, if the widget is not null, not equal to cusotm_ and if factor is set.
+  if(!is.null(react) && factorval && substr(widgetval, start = 1, stop = 9) != "**CUSTOM_"){
+    col <- geom$mapping[[type]]
+    expr <- quo_get_expr(col)
+    expr <- paste0("as.factor(", expr, ")")
+    expr <- str2lang(expr)
+    col <- quo_set_expr(quo = col, expr = expr)
+    geom$mapping[[type]] <- col
+  }
+  # Output
+  return(geom)
+}
+
+
+
+
 
 
 
@@ -389,6 +433,38 @@ server <- function(input, output, session){
             conditionalPanel(
               condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Density'"),
               selectInput(inputId = paste0("density_method", i, "_", input[[paste0("addlayer", i)]]), label = "Method", choices = c("gaussian","epanechnikov","rectangular","triangular","biweight","cosine","optcosine"), selected = "gaussian")
+            ),
+            # Color Colorpicker
+            conditionalPanel(
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Scatter' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Smooth' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Line' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Histogram' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Bar' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Boxplot' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Area' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Density'"),
+              conditionalPanel(
+                condition = paste0("input.plot_color", i, "_", input[[paste0("addlayer", i)]], "== '**CUSTOM_COLOR**'"),
+                colourInput(inputId = paste0("plot_color_picker", i, "_", input[[paste0("addlayer", i)]]), label = "Custom Color", value = "black", allowTransparent = TRUE)
+              )
+            ),
+            # Fill Colorpicker
+            conditionalPanel(
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Bar' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Histogram' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Boxplot' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Area' || input.plottype", i, "_", input[[paste0("addlayer", i)]], "== 'Density'"),
+              conditionalPanel(
+                condition = paste0("input.plot_fill", i, "_", input[[paste0("addlayer", i)]], "== '**CUSTOM_FILL**'"),
+                colourInput(inputId = paste0("plot_fill_picker", i, "_", input[[paste0("addlayer", i)]]), label = "Custom Fill", value = "black", allowTransparent = TRUE)
+              )
+            ),
+            # Shape Custom
+            conditionalPanel(
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Scatter'"),
+              conditionalPanel(
+                condition = paste0("input.plot_shape", i, "_", input[[paste0("addlayer", i)]], "== '**CUSTOM_SHAPE**'"),
+                numericInput(inputId = paste0("plot_shape_picker", i, "_", input[[paste0("addlayer", i)]]), label = "Custom Shape", value = 19, min = 0, max = 25, step = 1)
+              )
+            ),
+            # Size Custom
+            conditionalPanel(
+              condition = paste0("input.plottype", i, "_", input[[paste0("addlayer", i)]], " == 'Scatter'"),
+              conditionalPanel(
+                condition = paste0("input.plot_size", i, "_", input[[paste0("addlayer", i)]], "== '**CUSTOM_SIZE**'"),
+                numericInput(inputId = paste0("plot_size_picker", i, "_", input[[paste0("addlayer", i)]]), label = "Custom Size", value = 2)
+              )
             )
           )
         )
@@ -515,11 +591,11 @@ server <- function(input, output, session){
           updateSelectInput(session, inputId = paste0("axisy_select", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
           updateSelectInput(session, inputId = paste0("axisx_select", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
           # Scatter
-          updateSelectInput(session, inputId = paste0("plot_color", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
-          updateSelectInput(session, inputId = paste0("plot_shape", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
-          updateSelectInput(session, inputId = paste0("plot_size", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
+          updateSelectInput(session, inputId = paste0("plot_color", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", "**CUSTOM_COLOR**", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
+          updateSelectInput(session, inputId = paste0("plot_shape", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", "**CUSTOM_SHAPE**", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
+          updateSelectInput(session, inputId = paste0("plot_size", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", "**CUSTOM_SIZE**", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
           # Bar
-          updateSelectInput(session, inputId = paste0("plot_fill", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
+          updateSelectInput(session, inputId = paste0("plot_fill", i, "_", input[[paste0("addlayer", i)]]), choices = c("<null>", "**CUSTOM_FILL**", colnames(get(input[[paste0("data_select", i)]]))), selected = "<null>")
           updateSelectInput(session, inputId = paste0("plot_position", i, "_", input[[paste0("addlayer", i)]]), selected = "Stack")
           # Smooth
           updateSelectInput(session, inputId = paste0("smooth_method", i, "_", input[[paste0("addlayer", i)]]), selected = "lm")
@@ -572,10 +648,15 @@ server <- function(input, output, session){
         if(inputid != ""){
         if(inputid != "<null>"){
         if(inputid %in% colnames(datr())){
+          # if(inputid_f){
+          #   as.factor(data()[,inputid])
+          # } else {
+          #   data()[,inputid]
+          # }
           if(inputid_f){
-            as.factor(data()[,inputid])
+            inputid            
           } else {
-            data()[,inputid]
+            inputid            
           }
         }}}}
       }
@@ -595,6 +676,13 @@ server <- function(input, output, session){
           inputid
         }}}
       }
+      # Checker Facet
+      checker_facet <- function(data, inputid){
+        if(!is.null(inputid)){if(inputid != ""){if(inputid != "<null>"){if(inputid %in% colnames(datr())){
+          data()[,inputid]
+        }}}}
+      }
+      
 
 
       # Reactive values for the plot ----
@@ -656,17 +744,17 @@ server <- function(input, output, session){
         # If filter is empty or first filter does not exist
         } else if(length(filter_collect) == 0 | is.null(sql5[[paste0(i, "_1")]])){
           #print("31a")
-          print(paste0(sql1, sql2))
+          #print(paste0(sql1, sql2))
           sql_final <- paste0(sql1, sql2)
         # If first filter is not set to one of the colnames (change of data). Alternative: debounce.
         } else if(!(sql5[[paste0(i, "_1")]] %in% colnames(as.data.frame(get(input[[paste0("data_select", i)]]))))){
           #print("31b")
-          print(paste0(sql1, sql2))
+          #print(paste0(sql1, sql2))
           sql_final <- paste0(sql1, sql2)
         # Apply Filter
         } else {
           #print("32")
-          print(paste0(sql1, sql2, sql3, paste0(filter_collect, collapse = " ")))
+          #print(paste0(sql1, sql2, sql3, paste0(filter_collect, collapse = " ")))
           sql_final <- paste0(sql1, sql2, sql3, paste0(filter_collect, collapse = " "))
         }
 
@@ -684,8 +772,8 @@ server <- function(input, output, session){
 
 
       # Facet
-      plot_facetr <- reactive({checker(data = datr, inputid = input[[paste0("plot_facet", i)]], inputid_f = FALSE)})
-
+      plot_facetr <- reactive({checker_facet(data = datr, inputid = input[[paste0("plot_facet", i)]])})
+      
       # Theme
       plot_themer <- reactive({checker_list(list = themes, inputid = input[[paste0("ps_theme", i)]])})
 
@@ -734,7 +822,7 @@ server <- function(input, output, session){
         # Message for adding FIRST layer
         if(j == 0){
 
-          ggtitle(paste0("<Press 'Add Layer'-Button to add first layer.>"))
+          geomeval <- ggtitle(paste0("<Press 'Add Layer'-Button to add first layer.>"))
 
         } else
 
@@ -746,16 +834,16 @@ server <- function(input, output, session){
           !is.null(axisyr[[paste0(i, "_", j)]])
         ){
 
-          geom_point(
+          # Make geom
+          geomeval <- geom_point(
             aes_string(
               x =       axisxr[[paste0(i, "_", j)]],
               y =       axisyr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]],
               shape =   plot_shaper[[paste0(i, "_", j)]],
               size =    plot_sizer[[paste0(i, "_", j)]]
             )
           )
-
+          
         } else
 
         #############################################################
@@ -766,17 +854,15 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
 
-          geom_bar(
+          geomeval <- geom_bar(
             aes_string(
               x =       axisxr[[paste0(i, "_", j)]],
-              y =       axisyr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              y =       axisyr[[paste0(i, "_", j)]]
             ),
             position =  input[[paste0("plot_position", i, "_", j)]],
             stat =      "identity"
           )
-
+          
         } else
 
         #############################################################
@@ -786,11 +872,9 @@ server <- function(input, output, session){
           !is.null(axisyr[[paste0(i, "_", j)]])
         ){
 
-          geom_bar(
+          geomeval <- geom_bar(
             aes_string(
-              y =       axisyr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              y =       axisyr[[paste0(i, "_", j)]]
             ),
             position =  input[[paste0("plot_position", i, "_", j)]]
           )
@@ -804,11 +888,9 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
 
-          geom_bar(
+          geomeval <- geom_bar(
             aes_string(
-              x =       axisxr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              x =       axisxr[[paste0(i, "_", j)]]
             ),
             position =  input[[paste0("plot_position", i, "_", j)]]
           )
@@ -823,12 +905,10 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
           
-          geom_area(
+          geomeval <- geom_area(
             aes_string(
               x =       axisxr[[paste0(i, "_", j)]],
-              y =       axisyr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              y =       axisyr[[paste0(i, "_", j)]]
             )
           )
           
@@ -841,11 +921,9 @@ server <- function(input, output, session){
           !is.null(axisyr[[paste0(i, "_", j)]])
         ){
           
-          geom_area(
+          geomeval <- geom_area(
             aes_string(
-              y =       axisyr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              y =       axisyr[[paste0(i, "_", j)]]
             ),
             stat =      "bin"
           )
@@ -859,11 +937,9 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
           
-          geom_area(
+          geomeval <- geom_area(
             aes_string(
-              x =       axisxr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              x =       axisxr[[paste0(i, "_", j)]]
             ),
             stat =      "bin"
           )
@@ -879,11 +955,10 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
 
-          geom_line(
+          geomeval <- geom_line(
             aes_string(
               x =     axisxr[[paste0(i, "_", j)]],
               y =     axisyr[[paste0(i, "_", j)]],
-              color = plot_colorr[[paste0(i, "_", j)]],
               size =  plot_sizer[[paste0(i, "_", j)]]
             ),
             linetype = input[[paste0("plot_linetype", i, "_", j)]],
@@ -898,11 +973,9 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
 
-          geom_histogram(
+          geomeval <- geom_histogram(
             aes_string(
-              x =       axisxr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              x =       axisxr[[paste0(i, "_", j)]]
             ),
             position =  input[[paste0("plot_position", i, "_", j)]],
             bins =      input[[paste0("histogram_bins", i, "_", j)]]
@@ -917,11 +990,9 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
           
-          geom_density(
+          geomeval <- geom_density(
             aes_string(
-              x =       axisxr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              x =       axisxr[[paste0(i, "_", j)]]
             ),
             linetype =  input[[paste0("plot_linetype", i, "_", j)]],
             kernel =    input[[paste0("density_method", i, "_", j)]]
@@ -936,11 +1007,9 @@ server <- function(input, output, session){
           !is.null(axisyr[[paste0(i, "_", j)]])
         ){
           
-          geom_boxplot(
+          geomeval <- geom_boxplot(
             aes_string(
-              y =       axisyr[[paste0(i, "_", j)]],
-              fill =    plot_fillr[[paste0(i, "_", j)]],
-              color =   plot_colorr[[paste0(i, "_", j)]]
+              y =       axisyr[[paste0(i, "_", j)]]
             )
           )
           
@@ -954,11 +1023,10 @@ server <- function(input, output, session){
           !is.null(axisxr[[paste0(i, "_", j)]])
         ){
 
-          geom_smooth(
+          geomeval <- geom_smooth(
             aes_string(
               x =     axisxr[[paste0(i, "_", j)]],
-              y =     axisyr[[paste0(i, "_", j)]],
-              color = plot_colorr[[paste0(i, "_", j)]]
+              y =     axisyr[[paste0(i, "_", j)]]
             ),
             method =  input[[paste0("smooth_method", i, "_", j)]],
             se =      input[[paste0("smooth_se", i, "_", j)]],
@@ -971,8 +1039,64 @@ server <- function(input, output, session){
         #############################################################
         # Message for selecting plot type and axis
         {
-          ggtitle(paste0("<Select Plot Type and Axis for Layer ", j, ", or close it.>"))
+          geomeval <- ggtitle(paste0("<Select Plot Type and Axis for Layer ", j, ", or close it.>"))
+          #geomeval <- ggtitle(paste0("<Press 'Add Layer'-Button to add first layer.>"))
         }
+        
+
+        if(exists("geomeval")){
+        if(class(geomeval)[1] != "labels"){
+        if(!is.null(input[[paste0("plottype", i, "_", j)]])){
+          # Add Color
+          geomeval <- gghandler(
+            geom =        geomeval,
+            type =        "colour",
+            react =       plot_colorr[[paste0(i, "_", j)]],
+            widgetval =   input[[paste0("plot_color", i, "_", j)]],
+            widgetout =   input[[paste0("plot_color_picker", i, "_", j)]],
+            session =     session,
+            factorname =  paste0("plot_color_factor", i, "_", j),
+            factorval =   input[[paste0("plot_color_factor", i, "_", j)]]
+          )
+          # Add Fill
+          if(input[[paste0("plottype", i, "_", j)]] %in% c("Bar", "Area", "Histogram", "Density", "Boxplot")){
+            geomeval <- gghandler(
+              geom =        geomeval,
+              type =        "fill",
+              react =       plot_fillr[[paste0(i, "_", j)]],
+              widgetval =   input[[paste0("plot_fill", i, "_", j)]],
+              widgetout =   input[[paste0("plot_fill_picker", i, "_", j)]],
+              session =     session,
+              factorname =  paste0("plot_fill_factor", i, "_", j),
+              factorval =   input[[paste0("plot_fill_factor", i, "_", j)]]
+            )
+          }
+          # Add Shape, Size
+          if(input[[paste0("plottype", i, "_", j)]] %in% c("Scatter")){
+            geomeval <- gghandler(
+              geom =        geomeval,
+              type =        "shape",
+              react =       plot_shaper[[paste0(i, "_", j)]],
+              widgetval =   input[[paste0("plot_shape", i, "_", j)]],
+              widgetout =   input[[paste0("plot_shape_picker", i, "_", j)]],
+              session =     session,
+              #factorname =  paste0("plot_fill_factor", i, "_", j),
+              factorval =   TRUE
+            )
+            
+            geomeval <- gghandler(
+              geom =        geomeval,
+              type =        "size",
+              react =       plot_sizer[[paste0(i, "_", j)]],
+              widgetval =   input[[paste0("plot_size", i, "_", j)]],
+              widgetout =   input[[paste0("plot_size_picker", i, "_", j)]],
+              session =     session,
+              factorname =  paste0("plot_size_factor", i, "_", j),
+              factorval =   input[[paste0("plot_size_factor", i, "_", j)]]
+            )
+          }
+        }}}
+        return(geomeval)
       })
 
       # print(adder)
